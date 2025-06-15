@@ -1,0 +1,195 @@
+--==============================================================
+-- 🛡️ GhostPreserver 😎  15-Jun-2025
+--==============================================================
+
+----------------------------------------------------------------
+-- ⚙️ إعدادات سريعة
+----------------------------------------------------------------
+local OUT_LIMIT_GHOST = 1
+local LAG_MIN, LAG_MAX = 8e5, 1.5e6
+local BOOST_MULTI, BOOST_TIME = 5, 600
+local ZERO_WINDOW, PING_SPIKE, ACTIVITY_TIME = 300, 900, 15*60
+local BACKUP_TIME = 300
+local GUI_SIZE = UDim2.fromOffset(280, 250)   -- زودنا الارتفاع عشان زر جديد
+local TARGET_SEC = 660*3600
+
+----------------------------------------------------------------
+-- 🛠️ خدمات Roblox
+----------------------------------------------------------------
+local Players = game:GetService("Players")
+local Net     = game:GetService("NetworkClient")
+local Run     = game:GetService("RunService")
+local TS      = game:GetService("TeleportService")
+local GS      = game:GetService("GuiService")
+local RSrv    = game:GetService("ReplicatedStorage")
+local LP      = Players.LocalPlayer
+
+--------------------------------------------------------------------- 🔔 Anti-AFK: يمنع الطرد بسبب الخمول
+local vu = game:GetService("VirtualUser")
+
+LP.Idled:Connect(function()
+    -- روبلوكس بيعتبرك Idle؟ نحاكي ضغطة ماوس وهميّة
+    vu:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+    task.wait(0.1)
+    vu:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+end)
+-------------------------------------------------------------
+--==============================================================
+--  🛡️ Anti-AFK v9  –  Made for فارس 😎    (15-Jun-2025)
+--  يمنع الطرد بسبب الخمول | مناسب للجوال | بدون تدخل يدوي
+--==============================================================
+
+local VirtualUser = game:service'VirtualUser'
+game:GetService("Players").LocalPlayer.Idled:connect(function()
+    VirtualUser:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+    wait(1)
+    VirtualUser:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+end)
+
+-- رسالة تأكيد
+print("✅ Anti-AFK v9 شغال بنجاح")
+
+--==============================================================
+
+
+---
+-- 📡 وضع الشبح
+----------------------------------------------------------------
+local function randLag() return math.random(LAG_MIN, LAG_MAX) end
+local function setLag(v)
+    pcall(function()
+        Net:SetOutgoingKBPSLimit(OUT_LIMIT_GHOST)
+        settings().Network.IncomingReplicationLag = v
+    end)
+end
+local function ghostOn() setLag(randLag()) end
+ghostOn()
+
+----------------------------------------------------------------
+-- 🚀 Ghost-Boost
+----------------------------------------------------------------
+local boost=false
+local function ghostBoost()
+    if boost then return end; boost=true
+    warn("[GP-v9] ⚠️ Boost شغّال")
+    local prev=settings().Network.IncomingReplicationLag
+    setLag(prev*BOOST_MULTI); frame.BackgroundColor3=Color3.fromRGB(255,60,60)
+    task.delay(BOOST_TIME,function()
+        setLag(randLag()); frame.BackgroundColor3=Color3.fromRGB(255,255,255)
+        warn("[GP-v9] ✅ Boost خلص"); boost=false
+    end)
+end
+
+----------------------------------------------------------------
+-- 🌀 Fake Zero + Client Load Sim
+----------------------------------------------------------------
+local function fakeZero()
+    pcall(function() settings().Network.IncomingReplicationLag=2e6 end)
+    task.wait(5); setLag(randLag())
+end
+local function clientLoadSim()
+    local f=Instance.new("RemoteEvent"); f.Name="GPv9_LoadPing"; f.Parent=RSrv
+    for i=1,5 do task.wait(1); pcall(function() f:FireServer("loading_"..i) end) end
+    f:Destroy()
+end
+
+----------------------------------------------------------------
+-- 🎨 GUI
+----------------------------------------------------------------
+local gui=Instance.new("ScreenGui",LP.PlayerGui)
+gui.Name="GhostPreserver9"
+frame=Instance.new("Frame",gui)
+frame.Size,frame.Position=GUI_SIZE,UDim2.fromScale(.02,.15)
+frame.BackgroundTransparency=.25; frame.Active=true; frame.Draggable=true
+
+local function mkLbl(t,y)
+    local l=Instance.new("TextLabel",frame)
+    l.Size=UDim2.new(1,0,0,22); l.Position=UDim2.new(0,0,0,y)
+    l.BackgroundTransparency=1; l.Font=Enum.Font.SourceSansBold; l.TextSize=17
+    l.Text=t; return l
+end
+local title   =mkLbl("🛡️ GP-v9 (لفارس)",0)
+local timerLb =mkLbl("⏳ 000:00:00",24)
+local stateLb =mkLbl("Ghost ✅ | المنيو ❌",48)
+local progBar =Instance.new("Frame",frame)
+progBar.BackgroundColor3=Color3.fromRGB(0,200,0)
+progBar.Size,progBar.Position=UDim2.new(0,0,0,4),UDim2.new(0,0,0,74)
+
+local function mkBtn(t,y,cb)
+    local b=Instance.new("TextButton",frame)
+    b.Size=UDim2.new(1,0,0,30); b.Position=UDim2.new(0,0,0,y)
+    b.Font=Enum.Font.SourceSansBold; b.TextSize=16; b.Text=t
+    b.MouseButton1Click:Connect(cb)
+end
+
+mkBtn("🚨 Boost 10 دقايق",  90,  ghostBoost)
+mkBtn("⏮️ Fake Zero",       122, fakeZero)
+mkBtn("📦 Load Sim",        154, clientLoadSim)
+mkBtn("📑 افتح/اقفل المنيو",186,function()
+    GS.MenuIsOpen=not GS.MenuIsOpen
+    stateLb.Text=string.format("Ghost ✅ | المنيو %s",
+        GS.MenuIsOpen and "مفتوحه ✅" or "مقفوله ❌")
+end)
+----------------------------------------------------------------
+-- 🛠️ زر «تفعيل الباتش»
+----------------------------------------------------------------
+local function doPatch()
+    local TeleportService = game:GetService("TeleportService")
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+    local invalidPlaceId = 1
+
+    pcall(function()
+        TeleportService:Teleport(invalidPlaceId, player)
+    end)
+
+    task.delay(5, function()
+        pcall(function()
+            player:Kick("تم تفعيل الباتش 🚀\nمتقلقش، انت موجود و ما جاك طرد ذي رساله توضح ان تم اختراق السيرفر عشان ما يجيك باند و انت صامل👍")
+        end)
+    end)
+end
+
+mkBtn("🛠️ تفعيل الباتش", 218, doPatch)
+
+----------------------------------------------------------------
+-- ⏲️ عدّاد الوقت + حفظ
+----------------------------------------------------------------
+getgenv().GP_Time=getgenv().GP_Time or 0
+local start=tick()
+Run.Heartbeat:Connect(function()
+    local t=math.floor(tick()-start)+getgenv().GP_Time
+    timerLb.Text=string.format("⏳ %03d:%02d:%02d",
+        math.floor(t/3600),math.floor(t/60)%60,t%60)
+    progBar.Size=UDim2.new(math.clamp(t/TARGET_SEC,0,1),0,0,4)
+end)
+task.spawn(function() while true do
+    getgenv().GP_Time=math.floor(tick()-start)+getgenv().GP_Time
+    task.wait(BACKUP_TIME)
+end end)
+
+----------------------------------------------------------------
+-- 🔁 تايمرز Zero/Spike/Activity
+----------------------------------------------------------------
+task.spawn(function()
+    local c=0
+    while true do
+        task.wait(1); c+=1
+        if c%ACTIVITY_TIME==0 then
+            pcall(function()
+                local root=LP.Character and LP.Character.PrimaryPart
+                if root then root.CFrame*=CFrame.Angles(0,math.rad(1),0) end
+            end)
+        end
+        if c%PING_SPIKE==0 and not boost then
+            local p=settings().Network.IncomingReplicationLag
+            setLag(p*2); task.wait(120); setLag(randLag())
+        end
+        if c%ZERO_WINDOW==0 then fakeZero(); clientLoadSim() end
+    end
+end)
+
+----------------------------------------------------------------
+
+
+print("✅ GhostPreserver v9 بالباتش جاهز – انسخ وشغّل وتفرّج على الرقم! 🚀")
